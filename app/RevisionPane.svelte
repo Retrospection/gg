@@ -52,12 +52,9 @@
     }
 
     // grouped authors for range mode
-    $: firstTimestamp = new Date(
-        Math.min(...revs.headers.map((h) => new Date(h.author.timestamp).getTime())),
-    ).toISOString();
-    $: lastTimestamp = new Date(
-        Math.max(...revs.headers.map((h) => new Date(h.author.timestamp).getTime())),
-    ).toISOString();
+    $: timestamps = revs.headers.map((h) => new Date(h.author.timestamp).getTime());
+    $: firstTimestamp = new Date(Math.min(...timestamps)).toISOString();
+    $: lastTimestamp = new Date(Math.max(...timestamps)).toISOString();
     $: authors = [...new Map(revs.headers.map((h) => [h.author.email, h.author])).values()];
 
     let syntheticChanges = revs.changes

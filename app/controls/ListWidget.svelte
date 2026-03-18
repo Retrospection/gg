@@ -14,8 +14,6 @@
 </script>
 
 <script lang="ts">
-    import { onMount } from "svelte";
-
     import type { Operand } from "../messages/Operand";
 
     interface $$Slots {
@@ -31,27 +29,15 @@
 
     let activedescendant = `${type}-${descendant}`;
     let box: HTMLElement;
-    let pollFrame: number;
 
-    onMount(() => {
-        pollFrame = requestAnimationFrame(pollScroll);
-        return () => {
-            if (pollFrame) cancelAnimationFrame(pollFrame);
-        };
-    });
-
-    function pollScroll() {
+    function onScroll() {
         if (box) {
-            if (box.scrollTop !== scrollTop) {
-                scrollTop = box.scrollTop;
-            }
-            // ResizeObserver doesn't fire when a scrollbar appears/disappears
+            scrollTop = box.scrollTop;
+            // scrollbar appearing/disappearing changes clientWidth but doesn't fire ResizeObserver
             if (box.clientWidth !== clientWidth) {
                 clientWidth = box.clientWidth;
             }
         }
-
-        pollFrame = requestAnimationFrame(pollScroll);
     }
 
     function onKeyDown(event: KeyboardEvent) {
@@ -170,7 +156,8 @@
     bind:this={box}
     bind:clientHeight
     bind:clientWidth
-    on:keydown={onKeyDown}>
+    on:keydown={onKeyDown}
+    on:scroll={onScroll}>
     <slot />
 </ol>
 

@@ -54,6 +54,16 @@
 
     let selectionAnchorIdx: number | undefined; // selection model is topologically ordered, selection view requires an anchor point
 
+    // O(1) commit lookup index, rebuilt when graphRows changes
+    let commitIndex = new Map<string, number>();
+    function rebuildCommitIndex(rows: EnhancedRow[] | undefined) {
+        commitIndex = new Map();
+        if (!rows) return;
+        for (let i = 0; i < rows.length; i++) {
+            commitIndex.set(rows[i].revision.id.commit.hex, i);
+        }
+    }
+
     let logHeight = 0;
     let logWidth = 0;
     let logScrollTop = 0;
@@ -81,7 +91,6 @@
         };
     }
 
-    // all these calculations are not efficient. probably doesn't matter
     let list: List = {
         getSize() {
             return graphRows?.length ?? 0;
@@ -91,13 +100,8 @@
                 return { from: -1, to: -1 };
             }
 
-            // translate from toplogical from::to to listwidget's anchor::extension
-            const revSetFromIdx = graphRows.findIndex(
-                (row) => row.revision.id.commit.hex === $revisionSelectEvent!.from.commit.hex,
-            );
-            const revSetToIdx = graphRows.findIndex(
-                (row) => row.revision.id.commit.hex === $revisionSelectEvent!.to.commit.hex,
-            );
+            let revSetFromIdx = commitIndex.get($revisionSelectEvent!.from.commit.hex) ?? -1;
+            let revSetToIdx = commitIndex.get($revisionSelectEvent!.to.commit.hex) ?? -1;
 
             const extensionIdx = revSetFromIdx === selectionAnchorIdx ? revSetToIdx : revSetFromIdx;
 
@@ -130,12 +134,12 @@
 
     function isInSelectedRange(row: EnhancedRow, selection: typeof $revisionSelectEvent): boolean {
         if (!selection || !graphRows) return false;
-        const fromIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === selection.from.commit.hex);
-        const toIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === selection.to.commit.hex);
-        const rowIdx = graphRows.indexOf(row);
+        let fromIdx = commitIndex.get(selection.from.commit.hex) ?? -1;
+        let toIdx = commitIndex.get(selection.to.commit.hex) ?? -1;
+        let rowIdx = commitIndex.get(row.revision.id.commit.hex) ?? -1;
         if (fromIdx === -1 || toIdx === -1 || rowIdx === -1) return false;
-        const minIdx = Math.min(fromIdx, toIdx);
-        const maxIdx = Math.max(fromIdx, toIdx);
+        let minIdx = Math.min(fromIdx, toIdx);
+        let maxIdx = Math.max(fromIdx, toIdx);
         return rowIdx >= minIdx && rowIdx <= maxIdx;
     }
 
@@ -188,7 +192,7 @@
     function handleClick(header: RevHeader) {
         if (!graphRows) return;
 
-        const clickedIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === header.id.commit.hex);
+        let clickedIdx = commitIndex.get(header.id.commit.hex) ?? -1;
         if (clickedIdx !== -1) {
             setSelection(clickedIdx, clickedIdx);
         }
@@ -200,7 +204,7 @@
             return;
         }
 
-        const clickedIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === header.id.commit.hex);
+        let clickedIdx = commitIndex.get(header.id.commit.hex) ?? -1;
         if (clickedIdx === -1) {
             handleClick(header); // invalid selection
             return;
@@ -274,11 +278,15 @@
             {
                 revset: entered_query == "" ? "all()" : entered_query,
             },
-            () => (graphRows = undefined),
+            () => {
+                graphRows = undefined;
+                rebuildCommitIndex(undefined);
+            },
         );
 
         if (page.type == "data") {
             graphRows = [];
+            commitIndex = new Map();
             graphRows = addPageToGraph(graphRows, page.value.rows);
 
             if (selectFirst && page.value.rows.length > 0) {
@@ -309,8 +317,8 @@
             return;
         }
 
-        let fromIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === selection.from.commit.hex);
-        let toIdx = graphRows.findIndex((r) => r.revision.id.commit.hex === selection.to.commit.hex);
+        let fromIdx = commitIndex.get(selection.from.commit.hex) ?? -1;
+        let toIdx = commitIndex.get(selection.to.commit.hex) ?? -1;
 
         if (fromIdx === -1) {
             fromIdx = graphRows.findIndex((r) => sameChange(r.revision.id.change, selection.from.change));
@@ -370,6 +378,7 @@
                 }
             }
 
+            commitIndex.set(row.revision.id.commit.hex, graph.length);
             graph.push(enhancedRow);
         }
 
